@@ -1,15 +1,24 @@
-buildPack: none
 pipelineConfig:
   pipelines:
 
-    # Add an additional step to the e2e-tests stage of the release pipeline.
     overrides:
+      # Add an additional step to the e2e-tests stage of the release pipeline.
       - pipeline: release
         stage: e2e-tests
         step:
           name: do-release
           sh: bash ./run-release.sh
         type: after
+      # Override the image and container options for the pullRequest pipeline.
+      - pipeline: pullRequest
+        agent:
+          image:
+            gcr.io/kaniko-project/executor:someOtherTag
+        containerOptions:
+          resources:
+            limits:
+              cpu: 8
+              memory: 16384Mi
 
     # Default pipeline which will be used for both pullRequest and release pipelines.
     default:
