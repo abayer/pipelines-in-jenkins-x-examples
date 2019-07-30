@@ -1,0 +1,108 @@
+# Set the build pack to use for this project.
+buildPack: javascript
+pipelineConfig:
+  # Set environment variables that are specific to this project.
+  env:
+    - name: JENKINS-X
+      value: JENKINS-X
+    - name: BUILDEVENT_DATASET
+      value: jx
+    - name: BUILDEVENT_APIKEY
+      valueFrom:
+        secretKeyRef:
+          key: BUILDEVENT_APIKEY
+          name: honeycomb-creds
+  pipelines:
+    # Run a set of steps before all stages of the pullRequest pipeline.
+    pullRequest:
+      setup:
+        steps:
+          - name: pullrequest-download-honeycomb-binary
+            sh: curl -L -o buildevents https://github.com/honeycombio/buildevents/releases/latest/download/buildevents-linux-amd64
+          - name: honeycomb-set-binary-permissions
+            sh: chmod 755 buildevents
+          - name: honeycomb-display-buildevents-version
+            sh: ./buildevents --version
+          - name: honeycomb-setup-build-timestamp
+            sh: echo $(date +%s) > build_start
+          - name: honeycomb-output-debug
+            sh: echo the build is "${APP_NAME}-${PULL_NUMBER}-${VERSION}-${BUILD_NUMBER}" and HONEYCOMB_BUILD_START=$(cat build_start)
+
+    # Run a set of steps before all stages of the release pipeline.
+    release:
+      setup:
+        steps:
+          - name: release-download-honeycomb-binary
+            sh: curl -L -o buildevents https://github.com/honeycombio/buildevents/releases/latest/download/buildevents-linux-amd64
+          - name: release-honeycomb-set-binary-permissions
+            sh: chmod 755 buildevents
+          - name: release-honeycomb-setup-build-timestamp
+            sh: echo $(date +%s) > build_start
+          - name: release-honeycomb-output-debug
+            sh: echo the build is "${APP_NAME}-${PULL_NUMBER}-${VERSION}-${BUILD_NUMBER}" and HONEYCOMB_BUILD_START=$(cat build_start)
+
+    overrides:
+      # Run a step before the npm-install step in the build stage in the pullRequest pipeline.
+      - name: npm-install
+        pipeline: pullRequest
+        stage: build
+        step:
+          name: honeycomb-npm-install-set-step-start-timestamp
+          sh: echo $(date +%s) > step_start
+        type: before
+      # Run a step after the npm-install step in the build stage in the pullRequest pipeline.
+      - name: npm-install
+        pipeline: pullRequest
+        stage: build
+        step:
+          name: honeycomb-step-log-after-npm-install
+          sh: ./buildevents step "${APP_NAME}-${PULL_NUMBER}-${VERSION}-${BUILD_NUMBER}" $(echo npm-install | sum | cut -f 1 -d \ ) $(cat step_start) npm-install
+        type: after
+
+      # Run a step before the npm-install step of the build stage of the release pipeline.
+      - name: npm-install
+        pipeline: release
+        stage: build
+        step:
+          name: release-honeycomb-npm-install-step-start-timestamp
+          sh: echo $(date +%s) > release_step_start
+        type: before
+      # Run a step after the npm-install step of the build stage of the release pipeline.
+      - name: npm-install
+        pipeline: release
+        stage: build
+        step:
+          name: release-honeycomb-step-log-after-npm-install
+          sh: ./buildevents step "${APP_NAME}-${PULL_NUMBER}-${VERSION}-${BUILD_NUMBER}" $(echo release-npm-install | sum | cut -f 1 -d \ ) $(cat release_step_start) release-npm-install
+        type: after
+
+      # Run a step before the npm-test step in the build stage of any pipeline.
+      - name: npm-test
+        stage: build
+        step:
+          name: honeycomb-npm-test-set-step-start-timestamp
+          sh: echo $(date +%s) > step_start
+        type: before
+      # Run a step after the npm-test step in the build stage of any pipeline.
+      - name: npm-test
+        stage: build
+        step:
+          name: honeycomb-step-log-after-npm-test
+          sh: ./buildevents step "${APP_NAME}-${PULL_NUMBER}-${VERSION}-${BUILD_NUMBER}" $(echo npm-test | sum | cut -f 1 -d \ ) $(cat step_start) npm-test
+        type: after
+
+      # Run a set of steps after the build stage of any pipeline.
+      - stage: build
+        steps:
+          - name: honeycomb-build-name-concat
+            sh: echo the build is "${APP_NAME}-${PULL_NUMBER}-${VERSION}-${BUILD_NUMBER}" and HONEYCOMB_BUILD_START=$(cat build_start)
+          - name: honeycomb-send-success
+            sh: ./buildevents build "${APP_NAME}-${PULL_NUMBER}-${VERSION}-${BUILD_NUMBER}" $(cat build_start) success
+        type: after
+
+      # Replace the post-build step in the build stage of any pipeline.
+      - stage: build
+        name: post-build
+        step:
+          sh: echo "This will actually break things, since we're not calling the normal post-build any more"
+        type: replace
