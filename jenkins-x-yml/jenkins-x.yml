@@ -1,12 +1,9 @@
 pipelineConfig:
   agent:
     image: go
-    label: jenkins-go
   pipelines:
     pullRequest:
       pipeline:
-        agent:
-          image: go
         stages:
         - name: run-make
           steps:
@@ -19,13 +16,13 @@ pipelineConfig:
             - --cache-dir=/workspace
             - --context=/workspace/source
             - --dockerfile=/workspace/source/Dockerfile
-            - --destination=gcr.io/REPLACE_ME_DOCKER_REGISTRY_ORG/REPLACE_ME_APP_NAME:${inputs.params.version}
-            - --cache-repo=gcr.io/REPLACE_ME_DOCKER_REGISTRY_ORG/cache
+            - --destination=gcr.io/jenkinsxio/demo-app:${inputs.params.version}
+            - --cache-repo=gcr.io/jenkinsxio/cache
             command: /kaniko/executor
             dir: /workspace/source
-            image: gcr.io/kaniko-project/executor:9912ccbf8d22bbafbf971124600fbb0b13b9cbd6
+            image: gcr.io/kaniko-project/executor:v0.10.0
             name: build-container-build
-          - command: jx step post build --image gcr.io/REPLACE_ME_DOCKER_REGISTRY_ORG/REPLACE_ME_APP_NAME:$PREVIEW_VERSION
+          - command: jx step post build --image gcr.io/jenkinsxio/demo-app:$PREVIEW_VERSION
             name: postbuild-post-build
           - command: make preview
             dir: /workspace/source/charts/preview
@@ -36,7 +33,7 @@ pipelineConfig:
     release:
       pipeline:
         agent:
-          image: go
+          image: go-maven
         stages:
         - name: run-make
           steps:
@@ -51,19 +48,19 @@ pipelineConfig:
             - --cache-dir=/workspace
             - --context=/workspace/source
             - --dockerfile=/workspace/source/Dockerfile
-            - --destination=gcr.io/REPLACE_ME_DOCKER_REGISTRY_ORG/REPLACE_ME_APP_NAME:${inputs.params.version}
-            - --cache-repo=gcr.io/REPLACE_ME_DOCKER_REGISTRY_ORG/cache
+            - --destination=gcr.io/jenkinsxio/demo-app:${inputs.params.version}
+            - --cache-repo=gcr.io/jenkinsxio/cache
             command: /kaniko/executor
             dir: /workspace/source
-            image: gcr.io/kaniko-project/executor:9912ccbf8d22bbafbf971124600fbb0b13b9cbd6
+            image: gcr.io/kaniko-project/executor:v0.10.0
             name: build-container-build
-          - command: jx step post build --image gcr.io/REPLACE_ME_DOCKER_REGISTRY_ORG/REPLACE_ME_APP_NAME:${VERSION}
+          - command: jx step post build --image gcr.io/jenkinsxio/demo-app:${VERSION}
             name: build-post-build
           - command: jx step changelog --version v${VERSION}
             name: promote-changelog
           - command: jx step helm release
-            dir: /workspace/source/charts/REPLACE_ME_APP_NAME
+            dir: /workspace/source/charts/demo-app
             name: promote-helm-release
           - command: jx promote -b --all-auto --timeout 1h --version ${VERSION}
-            dir: /workspace/source/charts/REPLACE_ME_APP_NAME
+            dir: /workspace/source/charts/demo-app
             name: promote-jx-promote
